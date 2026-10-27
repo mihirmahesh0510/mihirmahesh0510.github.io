@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#110d08">
+<title>Chor Kaun? A bluffing game for two</title>
+<meta name="description" content="Hide the Chor, lie about where it is, and catch your partner lying. A two-player game for couples, inspired by Raja Mantri Chor Sipahi.">
+<meta property="og:title" content="Chor Kaun? A bluffing game for two">
+<meta property="og:description" content="Hide the Chor, lie about where it is, and catch your partner lying.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* tastemaker build stamp
+   project=chor-kaun (app shell / game screens); mood=playful, dark only by product decision (Kulfi itself is permanent dark mode)
+   palette=generate_palette.py --mood playful --mode dark --seed 58 (complementary, base 74.1 / accent 254.1) + paper/ink/catch/win/muted tokens, all verified with check_contrast.py --matrix
+   contract: primary is a fill with on-primary text (text-safe) or large display text only; accent, catch, win, muted are text-safe on bg and surface; ink is text-safe on paper
+   type=Baloo 2 (display, Indian-designed, rounded) + Nunito (body); alt pairing to the playful default for its Devanagari-ready character
+   motion=app-shell track, CSS only: state transitions, chit flip, staggered chit entrance; reduced-motion swaps to instant
+   rule-break: the CHOR stamp sits rotated across the chit edge
+   motion exceptions (audit_motion MEDIUM, kept on purpose): 520ms chit flip is the reveal, the one dramatic beat of every round; the 1.2s dots loop is a waiting indicator, not UI feedback */
+:root{
+  --text:#f9f0e5; --bg:#110d08; --surface:#1c1813; --surface-2:#241f19; --primary:#a16b04; --on-primary:#ffffff;
+  --secondary:#3e290a; --accent:#54a1fb; --border:#28241e; --muted:#bfb1a0;
+  --paper:#efe2c6; --ink:#2a1e0e; --catch:#ff7a6b; --win:#7fd49a;
+  --font-display:"Baloo 2",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-body:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s12:48px;
+  --r-xs:6px; --r-sm:12px; --r-md:18px; --r-lg:26px; --r-pill:999px;
+  --ease:cubic-bezier(.2,.7,.2,1); --t-fast:160ms; --t-med:260ms;
+  color-scheme:dark; box-sizing:border-box;
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0;background:var(--bg);color:var(--text);overflow-x:clip}
+html{-webkit-text-size-adjust:100%;height:100%}
+body{font-family:var(--font-body);font-size:1rem;line-height:1.5;min-height:100%;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);
+  background:radial-gradient(120% 60% at 50% -10%, var(--secondary) 0%, var(--bg) 60%) no-repeat, var(--bg)}
+h1,h2,h3{font-family:var(--font-display);margin:0;line-height:1.1;letter-spacing:-.01em}
+p{margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:var(--r-xs)}
+.app{max-width:460px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;padding:var(--s4) var(--s5) var(--s8)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);min-height:44px}
+.brand{font-family:var(--font-display);font-weight:800;font-size:1.25rem;color:var(--paper)}
+.brand span{color:var(--primary)}
+.iconbtn{min-width:44px;min-height:44px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);font-weight:700;font-size:.85rem;padding:0 var(--s3);transition:border-color var(--t-fast) var(--ease)}
+.iconbtn:hover{border-color:var(--primary)}
+.screen{flex:1;display:flex;flex-direction:column;animation:enter var(--t-med) var(--ease)}
+@keyframes enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* buttons */
+.btn{width:100%;min-height:56px;border:0;border-radius:var(--r-md);background:var(--primary);color:var(--on-primary);font-family:var(--font-display);font-weight:700;font-size:1.2rem;padding:0 var(--s5);transition:transform var(--t-fast) var(--ease),opacity var(--t-fast) var(--ease)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.45}
+.btn.ghost{background:transparent;border:1.5px solid var(--border);color:var(--text)}
+.btn.ghost:hover{border-color:var(--primary)}
+.row{display:flex;gap:var(--s3)}
+.row>*{flex:1}
+
+/* home */
+.hero{padding:var(--s6) 0 var(--s4);text-align:left}
+.hero h1{font-size:clamp(2.8rem,13vw,3.6rem);font-weight:800;color:var(--paper)}
+.hero p{color:var(--muted);font-size:1.05rem;margin-top:var(--s2);max-width:30ch}
+.fan{position:relative;height:190px;margin:var(--s4) 0 var(--s2)}
+.fan .chit{position:absolute;width:96px;top:16px;left:50%}
+.fan .chit:nth-child(1){transform:translateX(-170%) rotate(-14deg)}
+.fan .chit:nth-child(2){transform:translateX(-95%) rotate(-5deg) translateY(-8px)}
+.fan .chit:nth-child(3){transform:translateX(-5%) rotate(5deg) translateY(-8px)}
+.fan .chit:nth-child(4){transform:translateX(70%) rotate(14deg)}
+.field{margin-top:var(--s5)}
+.field label,.field .lab{display:block;font-weight:700;font-size:.95rem;margin-bottom:var(--s2)}
+.field .hint{font-size:.82rem;color:var(--muted);margin-top:var(--s2)}
+.input{width:100%;min-height:52px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:1.05rem;padding:0 var(--s4);transition:border-color var(--t-fast) var(--ease)}
+.input:focus{border-color:var(--accent);outline:none}
+.seg{display:flex;gap:var(--s2);flex-wrap:wrap}
+.seg button{flex:1;min-height:44px;border-radius:var(--r-pill);border:1.5px solid var(--border);background:var(--surface);font-weight:700;font-size:.9rem;padding:0 var(--s3);white-space:nowrap;transition:border-color var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease)}
+.seg button[aria-pressed="true"]{border-color:var(--primary);background:var(--secondary)}
+.how{margin-top:var(--s6);border-top:1px solid var(--border);padding-top:var(--s5)}
+.how summary{font-family:var(--font-display);font-weight:700;font-size:1.1rem;cursor:pointer;min-height:44px;display:flex;align-items:center}
+.steps{list-style:none;padding:0;margin:var(--s3) 0 0;display:grid;gap:var(--s3);counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:32px 1fr;gap:var(--s3);align-items:start;color:var(--muted)}
+.steps li::before{content:counter(s);font-family:var(--font-display);font-weight:800;color:var(--paper);background:var(--surface-2);border-radius:var(--r-pill);width:32px;height:32px;display:flex;align-items:center;justify-content:center}
+.steps b{color:var(--text)}
+.push{margin-top:auto;padding-top:var(--s6)}
+.err{color:var(--catch);font-weight:700;font-size:.92rem;margin-top:var(--s3)}
+
+/* chits */
+.chit{position:relative;aspect-ratio:3/4;perspective:700px;border:0;background:transparent;padding:0}
+.chit .face{position:absolute;inset:0;border-radius:var(--r-sm);backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform 520ms var(--ease)}
+.chit .front{background:var(--paper);color:var(--ink);
+  background-image:linear-gradient(135deg,transparent 0 46%, color-mix(in srgb,var(--ink) 10%,transparent) 46% 54%, transparent 54%);
+  box-shadow:0 1px 0 color-mix(in srgb,var(--ink) 20%,transparent) inset, 0 8px 18px rgba(0,0,0,.35)}
+.chit .front b{font-family:var(--font-display);font-weight:800;font-size:2.1rem;line-height:1}
+.chit .front small{font-weight:700;font-size:.72rem;opacity:.7;margin-top:2px}
+.chit .back{background:var(--paper);color:var(--ink);transform:rotateY(180deg);box-shadow:0 8px 18px rgba(0,0,0,.35)}
+.chit.flipped .front{transform:rotateY(-180deg)}
+.chit.flipped .back{transform:rotateY(0)}
+.stamp{font-family:var(--font-display);font-weight:800;font-size:1.25rem;letter-spacing:.04em;color:var(--catch);border:3px solid var(--catch);border-radius:var(--r-xs);padding:2px 8px;transform:rotate(-14deg);background:color-mix(in srgb,var(--paper) 85%,transparent)}
+.stamp.dark{color:var(--ink);border-color:var(--ink)}
+.empty{font-family:var(--font-display);font-weight:700;color:var(--ink);opacity:.55}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3);margin:var(--s5) 0}
+.grid .chit{animation:deal 280ms var(--ease) both}
+.grid .chit:nth-child(2){animation-delay:60ms}.grid .chit:nth-child(3){animation-delay:120ms}.grid .chit:nth-child(4){animation-delay:180ms}
+@keyframes deal{from{opacity:0;transform:translateY(16px) rotate(-4deg)}to{opacity:1;transform:none}}
+.grid button.chit{cursor:pointer;border-radius:var(--r-sm)}
+.grid button.chit:disabled{cursor:default}
+.grid .chit.pick .front{outline:3px solid var(--primary);outline-offset:3px}
+.grid .chit.hid .front{opacity:.25}
+.grid .chit.claimed .front{outline:3px dashed var(--accent);outline-offset:3px}
+.chit .mine{position:absolute;bottom:-26px;left:0;right:0;text-align:center;font-size:.72rem;font-weight:700;color:var(--primary)}
+
+/* game */
+.score{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:var(--s3);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s3) var(--s4)}
+.score .p{min-width:0}
+.score .p:last-child{text-align:right}
+.score .nm{font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.score .pts{font-family:var(--font-display);font-weight:800;font-size:1.8rem;line-height:1;font-variant-numeric:tabular-nums;display:inline-block;transition:transform var(--t-med) var(--ease)}
+.score .pts.bump{transform:scale(1.25)}
+.score .role{font-size:.72rem;font-weight:700;color:var(--muted)}
+.score .mid{text-align:center;font-size:.78rem;color:var(--muted);font-weight:700}
+.score .mid b{display:block;font-family:var(--font-display);font-size:1rem;color:var(--text)}
+.track{height:6px;border-radius:var(--r-pill);background:var(--border);margin-top:var(--s2);overflow:hidden}
+.track i{display:block;height:100%;background:var(--primary);border-radius:var(--r-pill);transform-origin:left;transition:transform var(--t-med) var(--ease)}
+.track.r i{background:var(--accent);margin-left:auto;transform-origin:right}
+.title{margin-top:var(--s6)}
+.title .who{font-weight:700;font-size:.85rem;color:var(--primary)}
+.title h2{font-size:1.9rem;color:var(--paper);margin-top:2px}
+.title p{color:var(--muted);margin-top:var(--s2)}
+.claimbox{display:grid;gap:var(--s3);margin-top:var(--s2)}
+.claimtype{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+.claimtype button{min-height:52px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:var(--surface);font-weight:700;font-size:.92rem;padding:var(--s2);transition:border-color var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease)}
+.claimtype button[aria-pressed="true"]{border-color:var(--primary);background:var(--secondary)}
+.preview{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s4)}
+.preview .q{font-family:var(--font-display);font-weight:700;font-size:1.3rem;line-height:1.25}
+.truth{display:inline-block;margin-top:var(--s2);font-size:.8rem;font-weight:800;padding:2px 10px;border-radius:var(--r-pill);border:1.5px solid currentColor}
+.truth.t{color:var(--win)} .truth.l{color:var(--catch)}
+.bubble{position:relative;background:var(--paper);color:var(--ink);border-radius:var(--r-lg) var(--r-lg) var(--r-lg) var(--r-xs);padding:var(--s4) var(--s5);margin-top:var(--s4);box-shadow:0 10px 24px rgba(0,0,0,.35);animation:pop 260ms var(--ease) both}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+.bubble small{display:block;font-weight:700;font-size:.78rem;opacity:.7}
+.bubble .q{font-family:var(--font-display);font-weight:800;font-size:1.45rem;line-height:1.2}
+.calls{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3);margin-top:var(--s5)}
+.call{min-height:72px;border-radius:var(--r-md);border:2px solid var(--border);background:var(--surface);font-family:var(--font-display);font-weight:800;font-size:1.5rem;transition:border-color var(--t-fast) var(--ease),background-color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.call small{display:block;font-family:var(--font-body);font-weight:700;font-size:.75rem;color:var(--muted)}
+.call:active{transform:scale(.97)}
+.call.sach[aria-pressed="true"]{border-color:var(--win);background:color-mix(in srgb,var(--win) 14%,var(--surface))}
+.call.jhooth[aria-pressed="true"]{border-color:var(--catch);background:color-mix(in srgb,var(--catch) 14%,var(--surface))}
+.lifeline{margin-top:var(--s3);min-height:48px;width:100%;border-radius:var(--r-md);border:1.5px dashed var(--border);background:transparent;font-weight:700;font-size:.92rem;color:var(--muted);transition:border-color var(--t-fast) var(--ease)}
+.lifeline:hover:not(:disabled){border-color:var(--accent);color:var(--text)}
+.status{display:flex;align-items:center;gap:var(--s3);margin-top:var(--s5);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s4);font-weight:700}
+.dots{display:inline-flex;gap:4px}
+.dots i{width:8px;height:8px;border-radius:var(--r-pill);background:var(--primary);animation:blink 1.2s infinite both}
+.dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.live{margin-top:var(--s3);color:var(--muted);font-size:.95rem}
+.live b{color:var(--text)}
+
+/* reveal */
+.verdict{text-align:center;margin-top:var(--s5)}
+.verdict h2{font-size:2.6rem;color:var(--paper)}
+.verdict h2.caught{color:var(--catch)} .verdict h2.escaped{color:var(--win)}
+.verdict p{color:var(--muted);margin-top:var(--s2)}
+.facts{display:grid;gap:var(--s2);margin-top:var(--s5)}
+.fact{display:flex;justify-content:space-between;gap:var(--s3);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:var(--s3) var(--s4);font-size:.95rem}
+.fact b{font-weight:800}
+.reacts{display:flex;gap:var(--s2);overflow-x:auto;margin-top:var(--s5);padding-bottom:var(--s1)}
+.reacts button{flex:none;min-height:44px;border-radius:var(--r-pill);border:1.5px solid var(--border);background:var(--surface);font-weight:700;font-size:.9rem;padding:0 var(--s4);white-space:nowrap;transition:border-color var(--t-fast) var(--ease)}
+.reacts button:hover{border-color:var(--primary)}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translateX(-50%);background:var(--paper);color:var(--ink);font-family:var(--font-display);font-weight:800;font-size:1.15rem;padding:var(--s3) var(--s5);border-radius:var(--r-pill);box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity var(--t-med) var(--ease),transform var(--t-med) var(--ease);max-width:calc(100% - 40px);text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(6px)}
+
+/* invite */
+.invite{margin-top:var(--s6);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--s5)}
+.invite .code{font-family:var(--font-display);font-weight:800;font-size:2rem;letter-spacing:.08em;color:var(--paper)}
+.invite .link{font-size:.85rem;color:var(--muted);word-break:break-all;margin-top:var(--s2)}
+.wa{background:#1f8f4e}
+/* end */
+.trophy{font-family:var(--font-display);font-weight:800;font-size:3rem;color:var(--paper);text-align:center;margin-top:var(--s6);line-height:1.05}
+.trophy small{display:block;font-size:1rem;color:var(--muted);font-weight:700;margin-top:var(--s2)}
+.fb{margin-top:var(--s6)}
+.fb .lab{font-weight:700;margin-bottom:var(--s2)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.conn{font-size:.78rem;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
+.conn i{width:8px;height:8px;border-radius:var(--r-pill);background:var(--win)}
+.conn.off i{background:var(--catch)}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}
+}
+@media (hover:none){.iconbtn:hover,.btn.ghost:hover,.reacts button:hover,.lifeline:hover:not(:disabled){border-color:var(--border)}}
+</style>
+</head>
+<body>
+<div class="app" id="app" aria-live="polite"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ===== Config ===== */
+var POSTHOG_KEY = '';                     // paste your PostHog project API key to start collecting results
+var POSTHOG_HOST = 'https://us.i.posthog.com';
+var RELAY = 'https://ntfy.sh/';
+var WIN_AT = 9, FIND_PTS = 3, ESCAPE_PTS = 1;
+var REACTIONS = ['Pakda!','Kaise pata chala?!','Bach gaya','Agli baar','Jhoothi!','Rematch?'];
+
+/* ===== Analytics ===== */
+(function(){ if(!POSTHOG_KEY) return;
+  !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys onSessionId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+  posthog.init(POSTHOG_KEY,{api_host:POSTHOG_HOST,autocapture:false,capture_pageview:false,persistence:'localStorage'});
+})();
+var EVENTS=[];
+function track(name,props){
+  if(S.fresh===false)return;
+  var p=Object.assign({room:S.room||null,game:S.game,role_in_room:S.host?'host':'guest',plays_games:S.me&&S.me.gamer,gender:S.me&&S.me.gender},props||{});
+  EVENTS.push({name:name,props:p,t:Date.now()});
+  try{ if(window.posthog&&POSTHOG_KEY){ posthog.capture(name,p); } }catch(e){}
+  if(location.search.indexOf('debug=1')>-1) console.log('[event]',name,p);
+}
+
+/* ===== Utilities ===== */
+function $(s,el){return (el||document).querySelector(s)}
+function rid(n){var a='abcdefghjkmnpqrstuvwxyz23456789',s='';var r=crypto.getRandomValues(new Uint8Array(n));for(var i=0;i<n;i++)s+=a[r[i]%a.length];return s}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function store(k,v){try{if(v===undefined)return JSON.parse(localStorage.getItem(k));localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}}
+function sha(s){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(b){return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0')}).join('')})}
+var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+var toastT;function toast(t){if(S.fresh===false)return;var el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(toastT);toastT=setTimeout(function(){el.classList.remove('on')},2200)}
+function buzz(ms){if(S.fresh===false)return;try{if(navigator.vibrate)navigator.vibrate(ms)}catch(e){}}
+var AC=null,muted=store('ck_muted')===true;
+function tone(f,d,type,g){if(muted||S.fresh===false)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();var o=AC.createOscillator(),v=AC.createGain();o.type=type||'sine';o.frequency.value=f;v.gain.setValueAtTime(g||.08,AC.currentTime);v.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+d);o.connect(v);v.connect(AC.destination);o.start();o.stop(AC.currentTime+d)}catch(e){}}
+var SFX={tap:function(){tone(660,.08,'triangle',.05)},flip:function(){tone(440,.12,'triangle',.06);setTimeout(function(){tone(620,.12,'triangle',.06)},90)},
+  caught:function(){tone(523,.14,'square',.05);setTimeout(function(){tone(392,.22,'square',.05)},120)},
+  escaped:function(){tone(523,.12,'triangle',.07);setTimeout(function(){tone(659,.12,'triangle',.07)},110);setTimeout(function(){tone(784,.2,'triangle',.07)},220)},
+  ping:function(){tone(880,.1,'sine',.05)}};
+
+/* ===== State ===== */
+var params=new URLSearchParams(location.search);var NS=params.get('as')||'';
+var S={room:params.get('room'),me:null,host:false,players:{},order:[],game:1,started:false,firstChor:null,
+  rounds:{},round:1,scores:{},seen:{},lifeline:{},finished:false,pendingName:'',connected:false,stats:{},feedback:null,joinedAt:null,createdAt:null,lastResult:null};
+
+/* ===== Transport (ntfy.sh relay, BroadcastChannel for local testing) ===== */
+var T={es:null,bc:null,
+  open:function(room,onmsg){
+    if(params.get('local')==='1'){T.bc=new BroadcastChannel('ck-'+room);T.bc.onmessage=function(e){onmsg(e.data)};S.connected=true;
+      var log=store('ck_log_'+room)||[];log.forEach(function(m){onmsg(m)});return}
+    var url=RELAY+encodeURIComponent('ck-'+room)+'/sse?since=all';
+    T.es=new EventSource(url);
+    T.es.onopen=function(){S.connected=true;renderConn()};
+    T.es.onerror=function(){S.connected=false;renderConn()};
+    T.es.addEventListener('message',function(e){try{var d=JSON.parse(e.data);if(d.event==='message'&&d.message){onmsg(JSON.parse(d.message))}}catch(err){}});
+  },
+  send:function(room,msg){
+    if(T.bc){T.bc.postMessage(msg);var log=store('ck_log_'+room)||[];log.push(msg);store('ck_log_'+room,log);return Promise.resolve()}
+    return fetch(RELAY+encodeURIComponent('ck-'+room),{method:'POST',body:JSON.stringify(msg)}).catch(function(){toast('Connection hiccup. Retrying...');return new Promise(function(r){setTimeout(r,1500)}).then(function(){return fetch(RELAY+encodeURIComponent('ck-'+room),{method:'POST',body:JSON.stringify(msg)})})});
+  }};
+function send(type,payload){var m={id:rid(12),type:type,from:S.me.id,game:S.game,p:payload||{},t:Date.now()};apply(m);T.send(S.room,m)}
+
+/* ===== Game rules ===== */
+function other(id){return S.order.find(function(x){return x!==id})}
+function chorOf(r){return r%2===1?S.firstChor:other(S.firstChor)}
+function R(){return S.rounds[S.round]||(S.rounds[S.round]={})}
+function claimTrue(r){if(r.claim==null||r.pos==null)return null;return r.claim.kind==='is'?r.pos===r.claim.chit:r.pos!==r.claim.chit}
+function stat(id,k){S.stats[id]=S.stats[id]||{caught:0,escaped:0,lies:0,liesCaught:0,callsRight:0};S.stats[id][k]++}
+
+var BOOT=Date.now();
+function apply(m){
+  if(S.seen[m.id])return;S.seen[m.id]=1;
+  S.fresh=!m.t||m.t>BOOT-1500||(S.me&&m.from===S.me.id&&m.t>BOOT-1500);
+  try{applyInner(m)}finally{S.fresh=true}
+}
+function applyInner(m){
+  if(m.type==='hello'){
+    if(!S.players[m.from]&&S.order.length>=2){if(S.me&&m.from===S.me.id)S.full=true;return render(true)}
+    if(!S.players[m.from]){S.players[m.from]=m.p;S.order.push(m.from);S.scores[m.from]=S.scores[m.from]||0;
+      if(S.me&&m.from!==S.me.id&&S.started===false){SFX.ping();buzz(30);if(S.host)track('partner_joined',{seconds_to_join:S.createdAt?Math.round((Date.now()-S.createdAt)/1000):null})}}
+    if(S.host&&S.order.length===2&&!S.started&&S.me&&m.from!==S.me.id&&!S.startSent){S.startSent=true;
+      var first=S.order[crypto.getRandomValues(new Uint8Array(1))[0]%2];setTimeout(function(){if(!S.started)send('start',{firstChor:first})},900)}
+    return render();
+  }
+  if(m.game!==S.game&&m.type!=='rematch')return;
+  var r;
+  switch(m.type){
+    case 'start': S.started=true;S.firstChor=m.p.firstChor;S.round=1;S.rounds={};S.finished=false;S.order.forEach(function(id){S.scores[id]=0});S.lifeline={};S.stats={};
+      track('round_started',{round:1,my_role:chorOf(1)===S.me.id?'chor':'sipahi'});break;
+    case 'hide': r=S.rounds[m.p.round]=S.rounds[m.p.round]||{};r.commit=m.p.commit;break;
+    case 'claim': r=S.rounds[m.p.round]=S.rounds[m.p.round]||{};r.claim={kind:m.p.kind,chit:m.p.chit};if(m.from!==S.me.id){SFX.ping();buzz(25)}break;
+    case 'call': r=S.rounds[m.p.round]=S.rounds[m.p.round]||{};r.call=m.p.call;break;
+    case 'hint_req': r=S.rounds[m.p.round]=S.rounds[m.p.round]||{};r.hintReq=true;S.lifeline[m.from]=true;
+      if(chorOf(m.p.round)===S.me.id&&r.hint==null){var sec=store(secretKey(m.p.round));if(sec){var empties=[0,1,2,3].filter(function(i){return i!==sec.pos});var h=empties[crypto.getRandomValues(new Uint8Array(1))[0]%empties.length];(function(rr,rn){setTimeout(function(){if(rr.hint==null)send('hint',{round:rn,chit:h})},400)})(r,m.p.round)}}break;
+    case 'hint': r=S.rounds[m.p.round]=S.rounds[m.p.round]||{};r.hint=m.p.chit;break;
+    case 'open': r=S.rounds[m.p.round]=S.rounds[m.p.round]||{};r.open=m.p.chit;
+      if(chorOf(m.p.round)===S.me.id&&r.pos==null){var s2=store(secretKey(m.p.round));if(s2){(function(rr,rn,sec){setTimeout(function(){if(rr.pos==null)send('reveal',{round:rn,pos:sec.pos,salt:sec.salt})},500)})(r,m.p.round,s2)}}break;
+    case 'reveal': r=S.rounds[m.p.round]=S.rounds[m.p.round]||{};
+      if(r.pos!=null)break;
+      r.pos=m.p.pos;r.salt=m.p.salt;
+      (function(rr,rn){sha(rr.pos+':'+rr.salt).then(function(h){rr.verified=(h===rr.commit);render()})})(r,m.p.round);
+      var chor=chorOf(m.p.round),sip=other(chor),found=r.open===r.pos,ct=claimTrue(r);
+      r.found=found;r.ct=ct;r.callRight=r.call?((r.call==='sach')===ct):null;
+      if(found){S.scores[sip]+=FIND_PTS;stat(sip,'caught')}else{S.scores[chor]+=ESCAPE_PTS;stat(chor,'escaped')}
+      if(!ct){stat(chor,'lies');if(r.call==='jhooth')stat(sip,'liesCaught')}
+      if(r.callRight)stat(sip,'callsRight');
+      var meWon=(found&&sip===S.me.id)||(!found&&chor===S.me.id);
+      S.lastResult={round:m.p.round,meWon:meWon};
+      setTimeout(function(){found?SFX.caught():SFX.escaped();buzz(found?[40,40,80]:60)},reduce?0:420);
+      track('round_result',{round:m.p.round,my_role:chor===S.me.id?'chor':'sipahi',found:found,claim_truthful:ct,call:r.call,call_correct:r.callRight,lifeline:!!r.hintReq,i_scored:meWon});
+      if(S.scores[sip]>=WIN_AT||S.scores[chor]>=WIN_AT){S.finished=true;var w=S.scores[S.me.id]>=WIN_AT;
+        track('game_finished',{won:w,rounds:m.p.round,my_score:S.scores[S.me.id],their_score:S.scores[other(S.me.id)]})}
+      break;
+    case 'next': if(m.p.round===S.round&&!S.finished){S.round++;track('round_started',{round:S.round,my_role:chorOf(S.round)===S.me.id?'chor':'sipahi'})}break;
+    case 'react': if(m.from!==S.me.id){toast(m.p.text);buzz(20);SFX.ping()}break;
+    case 'rematch': if(m.p.game>S.game){S.game=m.p.game;S.started=true;S.firstChor=m.p.firstChor;S.round=1;S.rounds={};S.finished=false;S.lifeline={};S.stats={};S.order.forEach(function(id){S.scores[id]=0});S.feedback=null;
+      S.view=null;if(m.from!==S.me.id)toast((S.players[m.from]||{}).name+' wants a rematch!')}break;
+  }
+  render();
+}
+function secretKey(round){return 'ck_sec_'+NS+S.room+'_'+S.game+'_'+round}
+
+/* ===== Rendering ===== */
+var A=$('#app');var ui={pick:null,claimKind:'not',claimChit:null,call:null,openPick:null,gamer:null,gender:null};
+function bar(right){return '<div class="bar"><div class="brand">Chor <span>Kaun?</span></div><div class="row" style="flex:none;gap:8px">'+(right||'')+'<button class="iconbtn" id="mute" aria-label="'+(muted?'Turn sound on':'Turn sound off')+'">'+(muted?'Sound off':'Sound on')+'</button></div></div>'}
+function chitHTML(i,opts){opts=opts||{};var back=opts.back||'';return '<'+(opts.btn?'button type="button"':'div')+' class="chit'+(opts.cls?' '+opts.cls:'')+'" data-i="'+i+'"'+(opts.btn?' aria-label="Chit '+(i+1)+'"':'')+(opts.disabled?' disabled':'')+'><div class="face front"><b>'+(i+1)+'</b><small>chit</small></div><div class="face back">'+back+'</div>'+(opts.label?'<span class="mine">'+opts.label+'</span>':'')+'</'+(opts.btn?'button':'div')+'>'}
+function renderConn(){var c=$('#conn');if(c){c.className='conn'+(S.connected?'':' off');c.lastChild.textContent=S.connected?'Connected':'Reconnecting'}}
+function scoreBar(){var me=S.me.id,op=other(me);var cm=chorOf(S.round)===me;
+  return '<div class="score"><div class="p"><div class="nm">'+esc(S.players[me].name)+' (you)</div><div class="pts" id="ptsMe">'+S.scores[me]+'</div><div class="role">'+(cm?'Chor':'Sipahi')+'</div><div class="track"><i style="transform:scaleX('+Math.min(1,S.scores[me]/WIN_AT)+')"></i></div></div>'+
+   '<div class="mid">Round<b>'+S.round+'</b>First to '+WIN_AT+'</div>'+
+   '<div class="p"><div class="nm">'+esc(S.players[op].name)+'</div><div class="pts" id="ptsOp">'+S.scores[op]+'</div><div class="role">'+(cm?'Sipahi':'Chor')+'</div><div class="track r"><i style="transform:scaleX('+Math.min(1,S.scores[op]/WIN_AT)+')"></i></div></div></div>'}
+function claimText(c,nameIsYou){return 'The Chor '+(c.kind==='is'?'is':'is <u>not</u>')+' under chit '+(c.chit+1)+'.'}
+
+var lastKey='';
+function render(force){
+  var key=JSON.stringify([S.started,S.round,S.game,S.finished,S.order.length,R(),S.scores,S.lifeline,ui,S.feedback,S.view]);
+  if(key===lastKey&&!force)return;lastKey=key;
+  if(S.full)return renderFull();
+  if(!S.me){return S.room?renderJoin():renderHome()}
+  if(!S.started)return renderWaiting();
+  if(S.finished&&R().pos!=null&&S.view==='end')return renderEnd();
+  var r=R(),me=S.me.id,isChor=chorOf(S.round)===me;
+  if(r.pos!=null)return renderReveal();
+  if(isChor)return renderChor();
+  return renderSipahi();
+}
+function renderHome(){
+  if(!viewed.home){viewed.home=1;track('page_view',{page:'home'})}
+  A.innerHTML='<div class="screen">'+bar()+
+  '<div class="hero"><h1>Chor Kaun?</h1><p>Hide the Chor. Lie about where it is. Catch your partner lying.</p></div>'+
+  '<div class="fan" aria-hidden="true">'+[0,1,2,3].map(function(i){return '<div class="chit'+(i===2?' flipped':'')+'"><div class="face front"><b>'+(i+1)+'</b><small>chit</small></div><div class="face back"><span class="stamp">CHOR</span></div></div>'}).join('')+'</div>'+
+  formHTML('Start a game')+
+  '<details class="how"><summary>How to play</summary><ol class="steps">'+
+  '<li><span><b>The Chor hides.</b> One of you hides the Chor under one of four chits, then makes a claim, true or false.</span></li>'+
+  '<li><span><b>The Sipahi calls it.</b> The other says Sach or Jhooth, then opens one chit.</span></li>'+
+  '<li><span><b>Swap and score.</b> Finding the Chor is worth '+FIND_PTS+'. Escaping is worth '+ESCAPE_PTS+'. First to '+WIN_AT+' wins.</span></li></ol></details>'+
+  '</div>';
+  bindForm(function(){S.host=true;S.room=rid(10);S.createdAt=Date.now();boot(true)});
+}
+function renderFull(){A.innerHTML='<div class="screen">'+bar()+'<div class="title"><h2>This game is full</h2><p>Two people are already playing here. Start your own game instead.</p></div><div class="push"><a class="btn" href="'+location.pathname+'" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Start a new game</a></div></div>';bindMute()}
+var viewed={};
+function renderJoin(){
+  var cur=$('#nm');if(cur)S.pendingName=cur.value;
+  var hostName=S.order.length?(S.players[S.order[0]]||{}).name:null;
+  if(!viewed.join){viewed.join=1;track('page_view',{page:'join'})}
+  A.innerHTML='<div class="screen">'+bar()+
+  '<div class="hero"><h1>'+(hostName?esc(hostName)+' dared you.':'You’ve been dared.')+'</h1><p>A two-player bluffing game. Hide the Chor, lie about it, and catch each other lying.</p></div>'+
+  '<div class="fan" aria-hidden="true">'+[0,1,2,3].map(function(i){return '<div class="chit'+(i===1?' flipped':'')+'"><div class="face front"><b>'+(i+1)+'</b><small>chit</small></div><div class="face back"><span class="stamp">CHOR</span></div></div>'}).join('')+'</div>'+
+  formHTML('Join the game')+'</div>';
+  bindForm(function(){S.host=false;boot(false)});
+}
+function formHTML(cta){
+  return '<div class="field"><label for="nm">Your name</label><input class="input" id="nm" maxlength="18" autocomplete="given-name" placeholder="What should your partner call you?" value="'+esc(S.pendingName)+'"></div>'+
+  '<div class="field"><span class="lab" id="g1">How often do you play games?</span><div class="seg" role="group" aria-labelledby="g1">'+
+    ['Often','Sometimes','Hardly ever'].map(function(x){return '<button type="button" data-g="'+x+'" aria-pressed="'+(ui.gamer===x)+'">'+x+'</button>'}).join('')+'</div></div>'+
+  '<div class="field"><span class="lab" id="g2">You are <span style="font-weight:600;color:var(--muted)">(optional)</span></span><div class="seg" role="group" aria-labelledby="g2">'+
+    ['Woman','Man','Skip'].map(function(x){return '<button type="button" data-x="'+x+'" aria-pressed="'+(ui.gender===x)+'">'+x+'</button>'}).join('')+'</div>'+
+    '<p class="hint">Used only for anonymous research on who plays what. Your partner never sees it.</p></div>'+
+  '<p class="err" id="err" hidden></p><div class="push"><button class="btn" id="go">'+cta+'</button></div>';
+}
+function bindForm(onGo){
+  bindMute();
+  A.querySelectorAll('[data-g]').forEach(function(b){b.onclick=function(){ui.gamer=b.dataset.g;S.pendingName=$('#nm').value;A.querySelectorAll('[data-g]').forEach(function(x){x.setAttribute('aria-pressed',x===b)});SFX.tap()}});
+  A.querySelectorAll('[data-x]').forEach(function(b){b.onclick=function(){ui.gender=b.dataset.x;S.pendingName=$('#nm').value;A.querySelectorAll('[data-x]').forEach(function(x){x.setAttribute('aria-pressed',x===b)});SFX.tap()}});
+  $('#go').onclick=function(){var n=$('#nm').value.trim();var e=$('#err');
+    if(!n){e.hidden=false;e.textContent='Add your name so your partner knows who’s lying.';$('#nm').focus();return}
+    if(!ui.gamer){e.hidden=false;e.textContent='Pick how often you play games. It takes one tap.';return}
+    S.me={id:rid(8),name:n,gamer:ui.gamer,gender:ui.gender&&ui.gender!=='Skip'?ui.gender:null};SFX.tap();onGo()};
+}
+function bindMute(){var m=$('#mute');if(m)m.onclick=function(){muted=!muted;store('ck_muted',muted);m.textContent=muted?'Sound off':'Sound on';m.setAttribute('aria-label',muted?'Turn sound on':'Turn sound off')}}
+function inviteLink(){return location.origin+location.pathname+'?room='+S.room+(params.get('local')==='1'?'&local=1':'')}
+function renderWaiting(){
+  var link=inviteLink(),txt='Chor Kaun? I bet you can’t catch me lying. Play with me: '+link;
+  A.innerHTML='<div class="screen">'+bar('<span class="conn" id="conn"><i></i><span>Connecting</span></span>')+
+  '<div class="title"><div class="who">Room ready</div><h2>'+(S.host?'Send this to your partner':'Joining '+esc((S.players[S.order[0]]||{}).name||'the game'))+'</h2><p>'+(S.host?'The game starts the moment they open it.':'Waiting for the game to start.')+'</p></div>'+
+  (S.host?'<div class="invite"><div class="code">'+S.room.toUpperCase().slice(0,5)+'</div><div class="link">'+esc(link)+'</div>'+
+  '<div style="display:grid;gap:10px;margin-top:16px"><a class="btn wa" id="wa" href="https://wa.me/?text='+encodeURIComponent(txt)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Send on WhatsApp</a>'+
+  '<div class="row"><button class="btn ghost" id="copy">Copy link</button>'+(navigator.share?'<button class="btn ghost" id="share">Share</button>':'')+'</div></div></div>':'')+
+  '<div class="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>'+(S.order.length<2?'Waiting for your partner':'Shuffling the chits')+'</span></div></div>';
+  bindMute();renderConn();
+  if(S.host){$('#wa').onclick=function(){track('invite_shared',{channel:'whatsapp'})};
+    $('#copy').onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(link).then(function(){toast('Link copied')});track('invite_shared',{channel:'copy'})};
+    var sh=$('#share');if(sh)sh.onclick=function(){navigator.share({title:'Chor Kaun?',text:'I bet you can’t catch me lying.',url:link}).then(function(){track('invite_shared',{channel:'native'})}).catch(function(){})}}
+}
+function renderChor(){
+  var r=R(),op=S.players[other(S.me.id)].name;
+  var html='<div class="screen">'+bar()+scoreBar();
+  if(r.commit==null){
+    html+='<div class="title"><div class="who">You’re the Chor</div><h2>Hide the Chor</h2><p>Pick a chit. '+esc(op)+' can’t see this.</p></div>'+
+    '<div class="grid">'+[0,1,2,3].map(function(i){return chitHTML(i,{btn:true,cls:ui.pick===i?'pick':'',label:ui.pick===i?'Chor here':''})}).join('')+'</div>'+
+    '<div class="push"><button class="btn" id="hide" '+(ui.pick==null?'disabled':'')+'>Hide it here</button></div>';
+  } else if(r.claim==null){
+    var pos=(store(secretKey(S.round))||{}).pos;
+    var c=ui.claimChit,ok=c!=null,ct=ok?(ui.claimKind==='is'?pos===c:pos!==c):null;
+    html+='<div class="title"><div class="who">You’re the Chor</div><h2>Make your claim</h2><p>Tell the truth or lie. Tap a chit to talk about it.</p></div>'+
+    '<div class="grid">'+[0,1,2,3].map(function(i){return chitHTML(i,{btn:true,cls:(i===pos?'pick ':'')+(i===c?'claimed':''),label:i===pos?'Your Chor':''})}).join('')+'</div>'+
+    '<div class="claimbox"><div class="claimtype" role="group" aria-label="Claim type"><button type="button" data-k="not" aria-pressed="'+(ui.claimKind==='not')+'">Chor is NOT under…</button><button type="button" data-k="is" aria-pressed="'+(ui.claimKind==='is')+'">Chor IS under…</button></div>'+
+    '<div class="preview"><div class="q">'+(ok?'“'+claimText({kind:ui.claimKind,chit:c})+'”':'Tap a chit above')+'</div>'+(ok?'<span class="truth '+(ct?'t':'l')+'">'+(ct?'This is the truth':'This is a lie')+'</span>':'')+'</div></div>'+
+    '<div class="push"><button class="btn" id="sendClaim" '+(ok?'':'disabled')+'>Send claim</button></div>';
+  } else {
+    html+='<div class="title"><div class="who">You’re the Chor</div><h2>'+esc(op)+' is deciding</h2><p>Keep a straight face.</p></div>'+
+    '<div class="bubble"><small>You said</small><div class="q">“'+claimText(r.claim)+'”</div></div>'+
+    '<div class="grid">'+[0,1,2,3].map(function(i){var p=(store(secretKey(S.round))||{}).pos;return chitHTML(i,{cls:(i===p?'pick ':'')+(r.hint===i?'hid':''),label:i===p?'Your Chor':(r.open===i?'Opened':'')})}).join('')+'</div>'+
+    '<div class="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>'+(r.open!=null?'Opening chit '+(r.open+1)+'…':r.call?esc(op)+' called <b style="color:'+(r.call==='sach'?'var(--win)':'var(--catch)')+'">'+(r.call==='sach'?'SACH':'JHOOTH')+'</b>. Now picking a chit…':esc(op)+' is reading your claim…')+'</span></div>'+
+    (r.hintReq?'<p class="live">'+esc(op)+' used the Raja’s help. One empty chit was removed.</p>':'')+'</div>';
+    A.innerHTML=html;bindMute();return;
+  }
+  html+='</div>';A.innerHTML=html;bindMute();
+  if(r.commit==null){
+    A.querySelectorAll('.grid .chit').forEach(function(b){b.onclick=function(){ui.pick=+b.dataset.i;SFX.tap();render()}});
+    $('#hide').onclick=function(){var pos=ui.pick,salt=rid(16);store(secretKey(S.round),{pos:pos,salt:salt});sha(pos+':'+salt).then(function(h){send('hide',{round:S.round,commit:h});track('chor_hidden',{round:S.round});ui.pick=null;ui.claimChit=null;ui.claimKind='not'})};
+  } else {
+    A.querySelectorAll('.grid .chit').forEach(function(b){b.onclick=function(){ui.claimChit=+b.dataset.i;SFX.tap();render()}});
+    A.querySelectorAll('[data-k]').forEach(function(b){b.onclick=function(){ui.claimKind=b.dataset.k;SFX.tap();render()}});
+    $('#sendClaim').onclick=function(){var pos=(store(secretKey(S.round))||{}).pos,c=ui.claimChit,ct=ui.claimKind==='is'?pos===c:pos!==c;
+      send('claim',{round:S.round,kind:ui.claimKind,chit:c});track('claim_made',{round:S.round,kind:ui.claimKind,truthful:ct});ui.claimChit=null};
+  }
+}
+function renderSipahi(){
+  var r=R(),op=S.players[other(S.me.id)].name;
+  var html='<div class="screen">'+bar()+scoreBar();
+  if(r.claim==null){
+    html+='<div class="title"><div class="who">You’re the Sipahi</div><h2>'+esc(op)+(r.commit?' is making a claim':' is hiding the Chor')+'</h2><p>Watch closely. Liars give themselves away.</p></div>'+
+    '<div class="grid">'+[0,1,2,3].map(function(i){return chitHTML(i)}).join('')+'</div>'+
+    '<div class="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>'+(r.commit?'Chor hidden. Waiting for the claim…':'Waiting for '+esc(op)+'…')+'</span></div>';
+  } else if(!r.call){
+    html+='<div class="bubble"><small>'+esc(op)+' says</small><div class="q">“'+claimText(r.claim)+'”</div></div>'+
+    '<div class="grid">'+[0,1,2,3].map(function(i){return chitHTML(i,{cls:i===r.claim.chit?'claimed':''})}).join('')+'</div>'+
+    '<div class="title" style="margin-top:0"><h2>Sach ya Jhooth?</h2></div>'+
+    '<div class="calls"><button class="call sach" data-c="sach">Sach<small>They’re telling the truth</small></button><button class="call jhooth" data-c="jhooth">Jhooth<small>They’re lying</small></button></div>';
+  } else {
+    var used=S.lifeline[S.me.id];
+    html+='<div class="bubble"><small>'+esc(op)+' says</small><div class="q">“'+claimText(r.claim)+'”</div></div>'+
+    '<div class="title"><div class="who">You called '+(r.call==='sach'?'Sach':'Jhooth')+'</div><h2>Open a chit</h2><p>Find the Chor for '+FIND_PTS+' points.</p></div>'+
+    '<div class="grid">'+[0,1,2,3].map(function(i){var gone=r.hint===i;return chitHTML(i,{btn:r.open==null,disabled:gone||r.open!=null,cls:(i===r.claim.chit?'claimed ':'')+(gone?'hid ':'')+(ui.openPick===i?'pick':''),label:gone?'Empty':(r.open===i?'Opening…':'')})}).join('')+'</div>'+
+    (r.open==null?'<div class="push"><button class="btn" id="openBtn" '+(ui.openPick==null?'disabled':'')+'>Open chit'+(ui.openPick!=null?' '+(ui.openPick+1):'')+'</button>'+
+    '<button class="lifeline" id="life" '+(used||r.hintReq?'disabled':'')+'>'+(r.hintReq?(r.hint!=null?'Raja removed chit '+(r.hint+1):'Asking the Raja…'):used?'Raja’s help used this game':'Ask the Raja for help (removes one empty chit, once per game)')+'</button></div>':
+    '<div class="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Revealing…</span></div>');
+  }
+  html+='</div>';A.innerHTML=html;bindMute();
+  A.querySelectorAll('[data-c]').forEach(function(b){b.onclick=function(){SFX.tap();buzz(15);send('call',{round:S.round,call:b.dataset.c});track('call_made',{round:S.round,call:b.dataset.c})}});
+  if(r.call&&r.open==null){
+    A.querySelectorAll('.grid button.chit:not([disabled])').forEach(function(b){b.onclick=function(){ui.openPick=+b.dataset.i;SFX.tap();render()}});
+    var ob=$('#openBtn');if(ob)ob.onclick=function(){var c=ui.openPick;ui.openPick=null;SFX.flip();send('open',{round:S.round,chit:c});track('chit_opened',{round:S.round})};
+    var lf=$('#life');if(lf)lf.onclick=function(){send('hint_req',{round:S.round});track('lifeline_used',{round:S.round})};
+  }
+}
+function renderReveal(){
+  var r=R(),me=S.me.id,chor=chorOf(S.round),sip=other(chor),isChor=chor===me,opName=S.players[other(me)].name;
+  var found=r.found,ct=r.ct;
+  var head=found?'Pakda gaya!':'Chor bhaag gaya!';
+  var sub=isChor?(found?'They found your Chor. +'+FIND_PTS+' to '+esc(opName)+'.':'You got away. +'+ESCAPE_PTS+' to you.'):(found?'You found the Chor. +'+FIND_PTS+' to you.':'Wrong chit. +'+ESCAPE_PTS+' to '+esc(opName)+'.');
+  var html='<div class="screen">'+bar()+scoreBar()+
+  '<div class="grid">'+[0,1,2,3].map(function(i){var isPos=i===r.pos;var back=isPos?'<span class="stamp">CHOR</span>':'<span class="empty">khaali</span>';
+    return chitHTML(i,{cls:(isPos||i===r.open?'flipped ':'')+(r.hint===i?'hid':''),back:back,label:i===r.open?(isChor?'They opened':'You opened'):(isPos&&i!==r.open?'Chor was here':'')})}).join('')+'</div>'+
+  '<div class="verdict"><h2 class="'+(found?'caught':'escaped')+'">'+head+'</h2><p>'+sub+'</p></div>'+
+  '<div class="facts"><div class="fact"><span>The claim was</span><b style="color:'+(ct?'var(--win)':'var(--catch)')+'">'+(ct?'the truth':'a lie')+'</b></div>'+
+  '<div class="fact"><span>'+(isChor?esc(opName)+' called':'You called')+'</span><b>'+(r.call==='sach'?'Sach':'Jhooth')+(r.callRight?' (right)':' (wrong)')+'</b></div>'+
+  (r.verified===false?'<div class="fact"><span>Fair play check</span><b style="color:var(--catch)">Didn’t match</b></div>':'')+'</div>'+
+  '<div class="reacts" role="group" aria-label="Send a reaction">'+REACTIONS.map(function(x){return '<button type="button" data-r="'+esc(x)+'">'+esc(x)+'</button>'}).join('')+'</div>'+
+  '<div class="push">'+(S.finished?'<button class="btn" id="toEnd">See who won</button>':'<button class="btn" id="next">Next: you’re the '+(isChor?'Sipahi':'Chor')+'</button>')+'</div></div>';
+  A.innerHTML=html;bindMute();
+  var gridEl=A.querySelector('.grid');
+  if(!reduce){gridEl.querySelectorAll('.chit.flipped').forEach(function(c){c.classList.remove('flipped');requestAnimationFrame(function(){requestAnimationFrame(function(){c.classList.add('flipped')})})})}
+  A.querySelectorAll('[data-r]').forEach(function(b){b.onclick=function(){send('react',{text:b.dataset.r});track('reaction_sent',{text:b.dataset.r,after:found?'caught':'escaped',my_role:isChor?'chor':'sipahi'});toast('Sent')}});
+  var nx=$('#next');if(nx)nx.onclick=function(){SFX.tap();send('next',{round:S.round})};
+  var te=$('#toEnd');if(te)te.onclick=function(){S.view='end';render(true)};
+}
+function renderEnd(){
+  var me=S.me.id,op=other(me),won=S.scores[me]>=WIN_AT,st=S.stats[me]||{},so=S.stats[op]||{};
+  var opName=S.players[op].name;
+  var html='<div class="screen">'+bar()+
+  '<div class="trophy">'+(won?'You win!':esc(opName)+' wins')+'<small>'+S.scores[me]+' to '+S.scores[op]+' in '+S.round+' rounds</small></div>'+
+  '<div class="facts" style="margin-top:24px">'+
+  '<div class="fact"><span>Chors you found</span><b>'+(st.caught||0)+'</b></div>'+
+  '<div class="fact"><span>Times you escaped</span><b>'+(st.escaped||0)+'</b></div>'+
+  '<div class="fact"><span>Lies you told</span><b>'+(st.lies||0)+'</b></div>'+
+  '<div class="fact"><span>'+esc(opName)+'’s lies you caught</span><b>'+(st.liesCaught||0)+' of '+(so.lies||0)+'</b></div></div>'+
+  '<div class="fb"><div class="lab">How was that?</div><div class="seg" role="group" aria-label="Rate the game">'+['Loved it','It was okay','Not for us'].map(function(x){return '<button type="button" data-f="'+x+'" aria-pressed="'+(S.feedback===x)+'">'+x+'</button>'}).join('')+'</div></div>'+
+  '<div class="push" style="display:grid;gap:10px"><button class="btn" id="rematch">Rematch</button>'+
+  '<a class="btn ghost" id="brag" href="https://wa.me/?text='+encodeURIComponent((won?'I beat ':'I lost to ')+opName+' at Chor Kaun, '+S.scores[me]+' to '+S.scores[op]+'. Think you can catch your partner lying? '+location.origin+location.pathname)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Share the result</a></div></div>';
+  A.innerHTML=html;bindMute();
+  A.querySelectorAll('[data-f]').forEach(function(b){b.onclick=function(){S.feedback=b.dataset.f;track('feedback',{value:b.dataset.f,won:won});SFX.tap();render(true);toast('Thanks!')}});
+  $('#rematch').onclick=function(){S.view=null;track('rematch_clicked',{won:won});var g=S.game+1;send('rematch',{game:g,firstChor:other(S.firstChor)})};
+  $('#brag').onclick=function(){track('result_shared',{won:won})};
+}
+
+/* ===== Boot ===== */
+function boot(isHost){
+  store('ck_me_'+NS+S.room,{me:S.me,host:isHost,createdAt:S.createdAt});
+  history.replaceState(null,'','?room='+S.room+(params.get('local')==='1'?'&local=1':'')+(NS?'&as='+NS:''));
+  if(isHost)track('game_created',{});
+  else track('joined',{});
+  if(!T.es&&!T.bc)T.open(S.room,apply);
+  send('hello',{name:S.me.name,gamer:S.me.gamer,gender:S.me.gender,host:isHost});
+  render(true);
+}
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden'&&S.me){
+  var r=R();track('session_hidden',{started:S.started,finished:S.finished,round:S.round,mid_round:S.started&&r.pos==null,last_round_lost:S.lastResult?!S.lastResult.meWon:null})}});
+(function init(){
+  if(S.room){var saved=store('ck_me_'+NS+S.room);
+    T.open(S.room,apply);
+    if(saved&&saved.me){S.me=saved.me;S.host=saved.host;S.createdAt=saved.createdAt;track('resumed',{})}
+  }
+  render(true);
+  if(S.room&&!S.me){setTimeout(function(){render(true)},1200)}
+})();
+</script>
+</body>
+</html>
